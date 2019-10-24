@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
@@ -73,12 +75,15 @@ namespace P2PMessengerServer
         public IPAddress Ip { get; private set; }
         public int Porta { get; private set; }
 
+        public List<TcpClient> Clients { get; private set; }
+
         public Servidor(IPAddress ip, int porta)
         {
             Ip = ip;
             Porta = porta;
 
             Rodando = false;
+            Clients = new List<TcpClient>();
         }
         
         public async Task Iniciar()
@@ -90,30 +95,44 @@ namespace P2PMessengerServer
 
                 TcpListener server = new TcpListener(Ip, Porta);
 
-                server.Start(); // this will start the server
+                server.Start();
 
                 Console.WriteLine("Servidor rodando.");
+                Console.WriteLine($"{Ip}:{Porta}");
 
-                while (!_cancellationToken.IsCancellationRequested) //we wait for a connection
+                while (!_cancellationToken.IsCancellationRequested)
                 {
-                    TcpClient client = server.AcceptTcpClient(); //if a connection exists, the server will accept it
+                    TcpClient client = server.AcceptTcpClient();
 
-                    NetworkStream ns = client.GetStream(); //networkstream is used to send/receive messages
-
-                    if (client.Connected) //while the client is connected, we look for incoming messages
+                    if (client.Connected)
                     {
-                        try
-                        {
-                            byte[] msg = new byte[1024]; //the messages arrive as byte array
-                            await ns.ReadAsync(msg, 0, msg.Length); //the same networkstream reads the message sent by the client
-                            await ns.WriteAsync(msg, 0, msg.Length);
-                        }
-                        catch (Exception) { }
+                        Clients.Add(client);
+                        BroadCast(client);
                     }
-
-                    await Task.Delay(TimeSpan.FromSeconds(0.5), _cancellationToken);
                 }
             }
+        }
+
+        private async Task BroadCast(TcpClient client)
+        {
+            while (!_cancellationToken.IsCancellationRequested && client.Connected)
+            {
+                try
+                {
+                    NetworkStream ns = client.GetStream();
+                        
+                    byte[] msg = new byte[1024];
+                    await ns.ReadAsync(msg, 0, msg.Length);
+                    foreach (var outroCliente in Clients.Where(c => !c.Equals(client) && c.Connected))
+                    {
+                        await outroCliente.GetStream().WriteAsync(msg, 0, msg.Length);
+                    }
+                        
+                }
+                catch (Exception) { }
+            }
+
+            Clients.Remove(client);
         }
     }
 }
