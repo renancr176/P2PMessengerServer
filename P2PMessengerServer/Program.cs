@@ -121,7 +121,7 @@ namespace P2PMessengerServer
                 {
                     NetworkStream ns = client.GetStream();
                         
-                    byte[] msg = new byte[1024];
+                    byte[] msg = new byte[999999];
                     await ns.ReadAsync(msg, 0, msg.Length);
                     foreach (var outroCliente in Clients.Where(c => !c.Equals(client) && c.Connected))
                     {
@@ -130,6 +130,8 @@ namespace P2PMessengerServer
                         
                 }
                 catch (Exception) { }
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
             }
 
             Clients.Remove(client);
